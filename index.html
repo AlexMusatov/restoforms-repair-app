@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RestoForms — Заявка на ремонт</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f6f9;
+  margin: 0;
+  padding: 20px;
+}
+.container {
+  max-width: 500px;
+  margin: auto;
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+}
+h1 {
+  text-align: center;
+}
+label {
+  display: block;
+  margin-top: 15px;
+  font-weight: bold;
+}
+select, input, textarea, button {
+  width: 100%;
+  margin-top: 5px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+button {
+  margin-top: 20px;
+  background: #111;
+  color: white;
+  cursor: pointer;
+}
+button:hover {
+  background: #333;
+}
+.success {
+  margin-top: 15px;
+  color: green;
+  text-align: center;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h1>Заявка на ремонт</h1>
+
+<form id="repairForm">
+<label>Тип заявки</label>
+<select id="category" required>
+<option value="">Выберите</option>
+<option>Технический отдел</option>
+<option>Производственное оборудование</option>
+<option>IT поддержка</option>
+<option>Служба безопасности</option>
+</select>
+
+<label>Локация</label>
+<input type="text" id="location" placeholder="Например: Кухня / Бар / Зал" required>
+
+<label>Описание проблемы</label>
+<textarea id="description" rows="4" placeholder="Опишите проблему..." required></textarea>
+
+<label>Приоритет</label>
+<select id="priority">
+<option>Обычный</option>
+<option>Срочный</option>
+<option>Критичный</option>
+</select>
+
+<button type="submit">Отправить заявку</button>
+</form>
+
+<div class="success" id="successMessage"></div>
+</div>
+
+<script>
+const form = document.getElementById('repairForm');
+const successMessage = document.getElementById('successMessage');
+
+form.addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const newRequest = {
+    category: document.getElementById('category').value,
+    location: document.getElementById('location').value,
+    description: document.getElementById('description').value,
+    priority: document.getElementById('priority').value,
+    date: new Date().toLocaleString()
+  };
+
+  let requests = JSON.parse(localStorage.getItem('repairRequests')) || [];
+  requests.push(newRequest);
+  localStorage.setItem('repairRequests', JSON.stringify(requests));
+
+  successMessage.innerText = "Заявка успешно отправлена!";
+  form.reset();
+});
+</script>
+
+</body>
+</html>
