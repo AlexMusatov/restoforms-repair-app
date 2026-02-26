@@ -109,15 +109,6 @@
       letter-spacing: 0.2px;
     }
 
-    .badge {
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: #eaf1ff;
-      color: #2d4d9c;
-      font-weight: 700;
-      font-size: 13px;
-    }
-
     .sub {
       margin-top: 8px;
       display: grid;
@@ -143,6 +134,16 @@
       color: #777;
       border: 1px dashed #f0e2db;
       border-radius: 12px;
+    }
+
+    .statusSelect {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      font-weight: 700;
+      font-size: 13px;
+      background: #fff;
+      cursor: pointer;
     }
 
     @media (max-width: 820px) {
@@ -178,14 +179,14 @@
       <select id="filterStatus">
         <option value="">Всі статуси</option>
         <option value="Нова">Нова</option>
-        <option value="В роботі">В роботі</option>
-        <option value="Готово">Готово</option>
-        <option value="Відхилено">Відхилено</option>
+        <option value="У роботі">У роботі</option>
+        <option value="Затримується">Затримується</option>
+        <option value="Закрито">Закрито</option>
       </select>
 
       <select id="filterCriticality">
         <option value="">Вся критичність</option>
-        <option value="Звичайна">Звичайна</option>
+        <option value="Звичайний">Звичайний</option>
         <option value="Терміново">Терміново</option>
         <option value="Критично">Критично</option>
       </select>
@@ -203,7 +204,6 @@
   </div>
 
   <script>
-    // 1) Вставь свои значения (у тебя они уже есть)
     const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
 
@@ -242,9 +242,35 @@
       }
     }
 
+    async function updateStatus(id, newStatus) {
+      elErr.textContent = "";
+      const { error } = await supabaseClient
+        .from('requests')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) {
+        elErr.textContent = `Помилка оновлення статусу: ${error.message}`;
+        return;
+      }
+
+      await loadList();
+    }
+
+    function statusSelectTemplate(r) {
+      const status = r.status || "Нова";
+      return `
+        <select class="statusSelect" onchange="updateStatus('${r.id}', this.value)">
+          <option value="Нова" ${status === "Нова" ? "selected" : ""}>Нова</option>
+          <option value="У роботі" ${status === "У роботі" ? "selected" : ""}>У роботі</option>
+          <option value="Затримується" ${status === "Затримується" ? "selected" : ""}>Затримується</option>
+          <option value="Закрито" ${status === "Закрито" ? "selected" : ""}>Закрито</option>
+        </select>
+      `;
+    }
+
     function cardTemplate(r) {
       const rq = r.request_number || "RQ-...";
-      const status = r.status || "Нова";
       const restaurant = r.restaurant || "-";
       const category = r.category || "-";
       const zone = r.equipment_zone || "-";
@@ -258,7 +284,7 @@
         <div class="card">
           <div class="row">
             <div class="rq">${escapeHtml(rq)}</div>
-            <div class="badge">${escapeHtml(status)}</div>
+            ${statusSelectTemplate(r)}
           </div>
 
           <div class="sub">
@@ -280,8 +306,6 @@
     }
 
     async function loadDistinctOptions() {
-      // Тянем последние 500, чтобы собрать варианты для фильтров.
-      // Для MVP этого хватает. Если станет большим, сделаем отдельные таблицы-справочники.
       const { data, error } = await supabaseClient
         .from('requests')
         .select('restaurant, category')
@@ -293,12 +317,10 @@
       const restaurants = Array.from(new Set((data || []).map(x => x.restaurant).filter(Boolean))).sort();
       const categories = Array.from(new Set((data || []).map(x => x.category).filter(Boolean))).sort();
 
-      // ресторан
       const keepR = filterRestaurant.value;
       filterRestaurant.innerHTML = `<option value="">Всі ресторани</option>` + restaurants.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
       filterRestaurant.value = keepR;
 
-      // категория
       const keepC = filterCategory.value;
       filterCategory.innerHTML = `<option value="">Всі категорії</option>` + categories.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
       filterCategory.value = keepC;
@@ -321,10 +343,7 @@
       if (filterCriticality.value) q = q.eq('criticality', filterCriticality.value);
 
       const s = searchRq.value.trim();
-      if (s) {
-        // поиск по номеру заявки
-        q = q.ilike('request_number', `%${s}%`);
-      }
+      if (s) q = q.ilike('request_number', `%${s}%`);
 
       const { data, error } = await q;
 
@@ -377,6 +396,9 @@
         await loadList();
       });
     }
+
+    // чтобы onchange мог вызвать updateStatus
+    window.updateStatus = updateStatus;
 
     (async function init() {
       wire();
