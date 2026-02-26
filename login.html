@@ -49,12 +49,29 @@
       msgEl.textContent = text || "";
     }
 
+    function buildRedirectUrl(path) {
+      // window.location.origin -> https://your-app.vercel.app
+      // гарантируем ровно один слэш между origin и путём
+      const base = window.location.origin.replace(/\/$/, "");
+      const p = String(path || "/").startsWith("/") ? path : ("/" + path);
+      return base + p;
+    }
+
     async function guardIfAlreadyLoggedIn() {
-      const { data } = await supabaseClient.auth.getSession();
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) {
+        console.log("getSession error:", error);
+        return;
+      }
       if (data?.session) {
         window.location.href = "./index.html";
       }
     }
+
+    // Если сессия появится (в т.ч. после возврата с magic-link) — перекидываем
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      if (session) window.location.href = "./index.html";
+    });
 
     btn.addEventListener('click', async () => {
       setMsg("", "");
@@ -64,10 +81,12 @@
       btn.disabled = true;
       btn.textContent = "Надсилаю...";
 
+      const redirectTo = buildRedirectUrl("/index.html");
+
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: window.location.origin + "/index.html"
+          emailRedirectTo: redirectTo
         }
       });
 
