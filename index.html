@@ -21,8 +21,35 @@
       padding: 20px;
       border-radius: 12px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      position: relative;
     }
     h1 { text-align: center; margin: 0 0 10px; }
+
+    .topActions{
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom: 8px;
+    }
+    .smallBtn{
+      display:inline-block;
+      padding:10px 14px;
+      border-radius:10px;
+      border:1px solid #e9d8cf;
+      background:#fff;
+      cursor:pointer;
+      font-weight:700;
+      text-decoration:none;
+      color:#2b2b2b;
+    }
+    .smallBtn.primary{
+      background:#e66a2c;
+      border:none;
+      color:#fff;
+      box-shadow:0 6px 14px rgba(230,106,44,0.25);
+    }
+
     label {
       display: block;
       margin-top: 15px;
@@ -67,43 +94,25 @@
       color: #666;
       text-align: center;
     }
+    .whoami{
+      margin-top: 8px;
+      font-size: 12px;
+      color:#666;
+      text-align:center;
+    }
   </style>
 </head>
 
 <body>
   <div class="container">
+
+    <div class="topActions">
+      <a class="smallBtn primary" href="./list.html">Усі заявки</a>
+      <button class="smallBtn" id="logoutBtn" type="button">Вийти</button>
+    </div>
+
     <h1>Заявка на ремонт</h1>
 
-    <div style="text-align:center; margin: 10px 0 20px 0;">
-      <a href="./list.html"
-         style="
-           display:inline-block;
-           padding:12px 22px;
-           border-radius:12px;
-           background:#e66a2c;
-           color:#fff;
-           font-weight:600;
-           text-decoration:none;
-           box-shadow:0 6px 14px rgba(230,106,44,0.3);
-         ">
-        Усі заявки
-      </a>
-    </div>
-<div style="text-align:center; margin: 0 0 14px 0;">
-  <button id="logoutBtn"
-    style="
-      display:inline-block;
-      padding:10px 18px;
-      border-radius:12px;
-      background:#1e2f5b;
-      color:#fff;
-      font-weight:700;
-      border:none;
-      cursor:pointer;
-    ">
-    Вийти
-  </button>
-</div>
     <form id="repairForm">
       <label>Тип заявки</label>
       <select id="category" required>
@@ -127,9 +136,10 @@
         <option>Критично</option>
       </select>
 
-      <button id="submitBtn" type="submit" disabled>Перевіряю доступ...</button>
+      <button id="submitBtn" type="submit">Надіслати заявку</button>
     </form>
 
+    <div class="whoami" id="whoami"></div>
     <div class="success" id="successMessage"></div>
     <div class="error" id="errorMessage"></div>
     <div class="hint" id="hintMessage"></div>
@@ -139,46 +149,12 @@
     // === 1) Supabase config ===
     const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
-    const LOGIN_PAGE = "./login.html";
-
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-document.getElementById("logoutBtn").addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
-  window.location.href = "./login.html";
-});
-    // === 2) Auth guard helpers ===
-    async function handleAuthRedirect() {
-      // Magic-link часто возвращает ?code=... (PKCE). Его нужно обменять на сессию.
-      const hasCode = new URLSearchParams(window.location.search).get("code");
-      if (hasCode) {
-        const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
-        if (error) {
-          console.log("exchangeCodeForSession error:", error);
-        }
-        // чистим URL, чтобы код не висел в адресной строке
-        const cleanUrl = window.location.origin + window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-    }
 
-    function goToLogin() {
-      const next = encodeURIComponent(window.location.pathname.replace(/^\//, "") || "index.html");
-      window.location.href = `${LOGIN_PAGE}?next=${next}`;
-    }
+    // Профиль текущего пользователя (заполним при init)
+    let CURRENT_PROFILE = null;
 
-    async function requireAuth() {
-      await handleAuthRedirect();
-      const { data: { session }, error } = await supabaseClient.auth.getSession();
-      if (error) console.log("getSession error:", error);
-
-      if (!session) {
-        goToLogin();
-        return null;
-      }
-      return session;
-    }
-
-    // === 3) UI helpers ===
+    // === 2) Helpers ===
     function pad4(n) { return String(n).padStart(4, "0"); }
 
     function makeRequestNumber() {
@@ -214,24 +190,95 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
       btn.textContent = isBusy ? "Надсилаю..." : "Надіслати заявку";
     }
 
-    function setReadyToSubmit() {
-      const btn = document.getElementById("submitBtn");
-      btn.disabled = false;
-      btn.textContent = "Надіслати заявку";
+    function setErr(msg, hint) {
+      document.getElementById("errorMessage").textContent = msg || "";
+      document.getElementById("hintMessage").textContent = hint || "";
     }
+
+    async function requireSessionOrRedirect() {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) {
+        // если что-то странное с auth — отправим на логин
+        window.location.href = "./login.html";
+        return null;
+      }
+      if (!data?.session) {
+        window.location.href = "./login.html";
+        return null;
+      }
+      return data.session;
+    }
+
+    async function ensureProfile(session) {
+      const uid = session.user.id;
+      const email = (session.user.email || "").toLowerCase();
+
+      // 1) пробуем найти profile
+      const p1 = await supabaseClient
+        .from('profiles')
+        .select('user_id, restaurant_id, role')
+        .eq('user_id', uid)
+        .maybeSingle();
+
+      if (p1.error) {
+        setErr("Помилка читання профілю", p1.error.message);
+        return null;
+      }
+      if (p1.data) return p1.data;
+
+      // 2) если профиля нет — ищем invite в allowed_emails
+      const inv = await supabaseClient
+        .from('allowed_emails')
+        .select('restaurant_id, role')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (inv.error) {
+        setErr("Помилка перевірки запрошення", inv.error.message);
+        return null;
+      }
+      if (!inv.data) {
+        // не приглашён ни в один ресторан
+        setErr(
+          "Немає доступу до жодного ресторану.",
+          "Попроси директора додати твій email у список запрошених."
+        );
+        return null;
+      }
+
+      // 3) создаём profile
+      const ins = await supabaseClient
+        .from('profiles')
+        .insert([{
+          user_id: uid,
+          restaurant_id: inv.data.restaurant_id,
+          role: inv.data.role || 'staff'
+        }])
+        .select('user_id, restaurant_id, role')
+        .single();
+
+      if (ins.error) {
+        setErr("Не вдалося створити профіль", ins.error.message);
+        return null;
+      }
+      return ins.data;
+    }
+
+    // === 3) Logout ===
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      window.location.href = "./login.html";
+    });
 
     // === 4) Form submit ===
     const form = document.getElementById("repairForm");
-    let currentSession = null;
 
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
       clearMessages();
 
-      // на всякий случай перепроверяем сессию
-      if (!currentSession) {
-        currentSession = await requireAuth();
-        if (!currentSession) return;
+      if (!CURRENT_PROFILE) {
+        return setErr("Немає профілю користувача.", "Спробуй перезайти або звернись до директора.");
       }
 
       const category = document.getElementById("category").value.trim();
@@ -240,7 +287,13 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
       const priority = document.getElementById("priority").value.trim();
 
       if (!category || !location || !description) {
-        document.getElementById("errorMessage").textContent = "Заповніть усі обовʼязкові поля.";
+        return setErr("Заповніть усі обовʼязкові поля.");
+      }
+
+      const { data: sessData } = await supabaseClient.auth.getSession();
+      const session = sessData?.session;
+      if (!session) {
+        window.location.href = "./login.html";
         return;
       }
 
@@ -248,43 +301,38 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
       const deadline = computeDeadline(priority);
       const responsible_department = mapResponsibleDepartment(category);
 
-      // IMPORTANT: initiator теперь от пользователя
-      const initiator = currentSession.user?.email || "Н/Д";
-
-      // пока нет таблицы ресторанов/профилей — оставляем заглушку
-      const restaurant = "Н/Д";
-      const status = "Нова";
-
       setBusy(true);
 
       const payload = {
         request_number,
-        restaurant,
-        initiator,
+        restaurant: "Н/Д",                      // можно позже заменить на имя ресторана
+        initiator: session.user.email || "Н/Д",  // будет полезно
         category,
         equipment_zone: location,
         description,
         photo_url: null,
         criticality: priority,
         responsible_department,
-        status,
-        deadline
+        status: "Нова",
+        deadline,
+
+        // ВАЖНО для RLS
+        restaurant_id: CURRENT_PROFILE.restaurant_id,
+        created_by: session.user.id
       };
 
-      const { data, error } = await supabaseClient
+      const { error } = await supabaseClient
         .from("requests")
-        .insert([payload])
-        .select("id");
+        .insert([payload]);
 
       setBusy(false);
 
       if (error) {
         console.log("INSERT ERROR:", error);
-        document.getElementById("errorMessage").textContent =
-          "Помилка при надсиланні. Перевір RLS/Policies у Supabase або назви колонок.";
-        document.getElementById("hintMessage").textContent =
-          `Технічна підказка: ${error.message || "дивись консоль"}`;
-        return;
+        return setErr(
+          "Помилка при надсиланні.",
+          error.message || "дивись консоль"
+        );
       }
 
       document.getElementById("successMessage").textContent = "Заявка успішно відправлена!";
@@ -292,19 +340,23 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
       form.reset();
     });
 
-    // === 5) Init ===
+    // === 5) Init (guard + profile) ===
     (async function init() {
-      // 1) требуем логин
-      currentSession = await requireAuth();
-      if (!currentSession) return;
+      clearMessages();
+      const session = await requireSessionOrRedirect();
+      if (!session) return;
 
-      // 2) разрешаем отправку
-      setReadyToSubmit();
+      const profile = await ensureProfile(session);
+      CURRENT_PROFILE = profile;
 
-      // 3) быстрый тест (можно удалить потом)
-      const { data, error } = await supabaseClient.from("requests").select("id").limit(1);
-      console.log("SUPABASE TEST:", data, error);
-      console.log("AUTH USER:", currentSession.user?.email);
+      const who = document.getElementById('whoami');
+      if (profile) {
+        who.textContent = `Ви: ${session.user.email} · роль: ${profile.role}`;
+      } else {
+        who.textContent = `Ви: ${session.user.email}`;
+      }
+
+      console.log("INDEX READY", { profile });
     })();
   </script>
 </body>
