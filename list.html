@@ -98,7 +98,7 @@
     .row {
       display: flex;
       gap: 10px;
-      align-items: baseline;
+      align-items: flex-start;
       justify-content: space-between;
       flex-wrap: wrap;
     }
@@ -107,10 +107,11 @@
       font-size: 18px;
       font-weight: 800;
       letter-spacing: 0.2px;
+      padding-top: 2px;
     }
 
     .sub {
-      margin-top: 8px;
+      margin-top: 10px;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
@@ -136,13 +137,36 @@
       border-radius: 12px;
     }
 
-    .statusSelect {
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid #ddd;
-      font-weight: 700;
+    /* === Статус заявки: лейбл-кнопка + селект === */
+    .statusBlock {
+      min-width: 260px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .statusLabelBtn {
+      display: inline-block;
+      padding: 7px 12px;
+      border-radius: 10px;
+      background: #1e2f5b; /* тёмно-синий */
+      color: #fff;
+      font-weight: 800;
       font-size: 13px;
-      background: #fff;
+      border: none;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .statusSelect {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #d5dbe8;
+      font-weight: 700;
+      font-size: 14px;
+      background: #f4f6fb;
       cursor: pointer;
     }
 
@@ -151,6 +175,7 @@
       .sub { grid-template-columns: 1fr; }
       h1 { text-align: center; }
       .topbar { flex-direction: column; align-items: stretch; }
+      .statusBlock { width: 100%; align-items: stretch; }
     }
   </style>
 </head>
@@ -260,12 +285,15 @@
     function statusSelectTemplate(r) {
       const status = r.status || "Нова";
       return `
-        <select class="statusSelect" onchange="updateStatus('${r.id}', this.value)">
-          <option value="Нова" ${status === "Нова" ? "selected" : ""}>Нова</option>
-          <option value="У роботі" ${status === "У роботі" ? "selected" : ""}>У роботі</option>
-          <option value="Затримується" ${status === "Затримується" ? "selected" : ""}>Затримується</option>
-          <option value="Закрито" ${status === "Закрито" ? "selected" : ""}>Закрито</option>
-        </select>
+        <div class="statusBlock">
+          <div class="statusLabelBtn">Статус заявки</div>
+          <select class="statusSelect" onchange="updateStatus('${r.id}', this.value)">
+            <option value="Нова" ${status === "Нова" ? "selected" : ""}>Нова</option>
+            <option value="У роботі" ${status === "У роботі" ? "selected" : ""}>У роботі</option>
+            <option value="Затримується" ${status === "Затримується" ? "selected" : ""}>Затримується</option>
+            <option value="Закрито" ${status === "Закрито" ? "selected" : ""}>Закрито</option>
+          </select>
+        </div>
       `;
     }
 
@@ -397,7 +425,6 @@
       });
     }
 
-    // чтобы onchange мог вызвать updateStatus
     window.updateStatus = updateStatus;
 
     (async function init() {
