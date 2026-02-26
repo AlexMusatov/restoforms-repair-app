@@ -59,27 +59,27 @@ button:hover {
 <form id="repairForm">
 <label>Тип заявки</label>
 <select id="category" required>
-<option value="">Выберите</option>
-<option>Технический отдел</option>
-<option>Производственное оборудование</option>
-<option>IT поддержка</option>
-<option>Служба безопасности</option>
+<option value="">Оберить</option>
+<option>Технічний відділ</option>
+<option>Виробниче обладнання</option>
+<option>IT підтримка</option>
+<option>Служба безпеки</option>
 </select>
 
-<label>Локация</label>
-<input type="text" id="location" placeholder="Например: Кухня / Бар / Зал" required>
+<label>Локація</label>
+<input type="text" id="location" placeholder="Наприклад: Кухня / Бар / Зал" required>
 
-<label>Описание проблемы</label>
-<textarea id="description" rows="4" placeholder="Опишите проблему..." required></textarea>
+<label>Опис проблеми</label>
+<textarea id="description" rows="4" placeholder="Опишіть проблему..." required></textarea>
 
-<label>Приоритет</label>
+<label>Пріоритет</label>
 <select id="priority">
-<option>Обычный</option>
-<option>Срочный</option>
-<option>Критичный</option>
+<option>Звичайний</option>
+<option>Терміново</option>
+<option>Критично</option>
 </select>
 
-<button type="submit">Отправить заявку</button>
+<button type="submit">Надіслати заявку</button>
 </form>
 
 <div class="success" id="successMessage"></div>
@@ -104,7 +104,7 @@ form.addEventListener('submit', function(e) {
   requests.push(newRequest);
   localStorage.setItem('repairRequests', JSON.stringify(requests));
 
-  successMessage.innerText = "Заявка успешно отправлена!";
+  successMessage.innerText = "Заявка успішно відправлена!";
   form.reset();
 });
 </script>
