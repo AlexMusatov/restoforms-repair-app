@@ -1,136 +1,228 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uk">
 <head>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RestoForms — Заявка на ремонт</title>
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background: #fff7f2;
-  margin: 0;
-  padding: 20px;
-}
-.container {
-  max-width: 500px;
-  margin: auto;
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-}
-h1 {
-  text-align: center;
-}
-label {
-  display: block;
-  margin-top: 15px;
-  font-weight: bold;
-}
-select, input, textarea, button {
-  width: 100%;
-  margin-top: 5px;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-}
-button {
-  margin-top: 20px;
-  background: #e66a2c;
-  color: white;
-  font-weight: 600;
-  border: none;
-  transition: 0.2s;
-}
-button:hover {
-  background: #cc5a22;
-}
-.success {
-  margin-top: 15px;
-  color: green;
-  text-align: center;
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RestoForms — Заявка на ремонт</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fff7f2;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    h1 { text-align: center; margin: 0 0 10px; }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    select, input, textarea, button {
+      width: 100%;
+      margin-top: 5px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 20px;
+      background: #e66a2c;
+      color: white;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:hover { background: #cc5a22; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .success {
+      margin-top: 15px;
+      color: #1a7f37;
+      text-align: center;
+      font-weight: 600;
+    }
+    .error {
+      margin-top: 15px;
+      color: #b42318;
+      text-align: center;
+      font-weight: 600;
+    }
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+  </style>
 </head>
 
 <body>
-<div class="container">
-<h1>Заявка на ремонт</h1>
+  <div class="container">
+    <h1>Заявка на ремонт</h1>
 
-<form id="repairForm">
-<label>Тип заявки</label>
-<select id="category" required>
-<option value="">Оберить</option>
-<option>Технічний відділ</option>
-<option>Виробниче обладнання</option>
-<option>IT підтримка</option>
-<option>Служба безпеки</option>
-</select>
+    <form id="repairForm">
+      <label>Тип заявки</label>
+      <select id="category" required>
+        <option value="">Оберіть</option>
+        <option>Технічний відділ</option>
+        <option>Виробниче обладнання</option>
+        <option>IT підтримка</option>
+        <option>Служба безпеки</option>
+      </select>
 
-<label>Локація</label>
-<input type="text" id="location" placeholder="Наприклад: Кухня / Бар / Зал" required>
+      <label>Локація</label>
+      <input type="text" id="location" placeholder="Наприклад: Кухня / Бар / Зал" required>
 
-<label>Опис проблеми</label>
-<textarea id="description" rows="4" placeholder="Опишіть проблему..." required></textarea>
+      <label>Опис проблеми</label>
+      <textarea id="description" rows="4" placeholder="Опишіть проблему..." required></textarea>
 
-<label>Пріоритет</label>
-<select id="priority">
-<option>Звичайний</option>
-<option>Терміново</option>
-<option>Критично</option>
-</select>
+      <label>Пріоритет</label>
+      <select id="priority">
+        <option>Звичайний</option>
+        <option>Терміново</option>
+        <option>Критично</option>
+      </select>
 
-<button type="submit">Надіслати заявку</button>
-</form>
+      <button id="submitBtn" type="submit">Надіслати заявку</button>
+    </form>
 
-<div class="success" id="successMessage"></div>
-</div>
+    <div class="success" id="successMessage"></div>
+    <div class="error" id="errorMessage"></div>
+    <div class="hint" id="hintMessage"></div>
+  </div>
 
-<script>
-const form = document.getElementById('repairForm');
-const successMessage = document.getElementById('successMessage');
+  <script>
+    // === 1) Supabase config ===
+    const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
 
-form.addEventListener('submit', function(e) {
-  e.preventDefault();
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const newRequest = {
-    category: document.getElementById('category').value,
-    location: document.getElementById('location').value,
-    description: document.getElementById('description').value,
-    priority: document.getElementById('priority').value,
-    date: new Date().toLocaleString()
-  };
+    // === 2) Helpers ===
+    function pad4(n) {
+      return String(n).padStart(4, "0");
+    }
 
-  let requests = JSON.parse(localStorage.getItem('repairRequests')) || [];
-  requests.push(newRequest);
-  localStorage.setItem('repairRequests', JSON.stringify(requests));
+    function makeRequestNumber() {
+      const d = new Date();
+      const yy = String(d.getFullYear()).slice(-2);
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const rnd = Math.floor(Math.random() * 10000);
+      return `RQ-${yy}${mm}-${pad4(rnd)}`;
+    }
 
-  successMessage.innerText = "Заявка успішно відправлена!";
-  form.reset();
-});
-</script>
+    function computeDeadline(priority) {
+      const now = new Date();
+      let hoursToAdd = 72;
+      if (priority === "Терміново") hoursToAdd = 24;
+      if (priority === "Критично") hoursToAdd = 4;
+      now.setHours(now.getHours() + hoursToAdd);
+      return now.toISOString(); // timestamptz OK
+    }
 
-<script>
-  const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
+    function mapResponsibleDepartment(category) {
+      // в твоей логике это по сути то же самое, но оставляю отдельной функцией
+      return category;
+    }
 
-  const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+    function clearMessages() {
+      document.getElementById("successMessage").textContent = "";
+      document.getElementById("errorMessage").textContent = "";
+      document.getElementById("hintMessage").textContent = "";
+    }
 
-async function testConnection() {
-  const { data, error } = await supabaseClient
-    .from('requests')
-    .select('*')
-    .limit(1);
+    function setBusy(isBusy) {
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = isBusy;
+      btn.textContent = isBusy ? "Надсилаю..." : "Надіслати заявку";
+    }
 
-  console.log("TEST RESULT:", data, error);
-}
+    // === 3) Form submit ===
+    const form = document.getElementById("repairForm");
 
-testConnection();
-</script>
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      clearMessages();
+
+      const category = document.getElementById("category").value.trim();
+      const location = document.getElementById("location").value.trim();
+      const description = document.getElementById("description").value.trim();
+      const priority = document.getElementById("priority").value.trim();
+
+      if (!category || !location || !description) {
+        document.getElementById("errorMessage").textContent = "Заповніть усі обовʼязкові поля.";
+        return;
+      }
+
+      const request_number = makeRequestNumber();
+      const deadline = computeDeadline(priority);
+      const responsible_department = mapResponsibleDepartment(category);
+
+      // Минимальные заглушки, чтобы совпасть с твоей таблицей (где NOT NULL):
+      const restaurant = "Н/Д";
+      const initiator = "Н/Д";
+      const status = "Нова";
+
+      setBusy(true);
+
+      const payload = {
+        request_number,
+        restaurant,
+        initiator,
+        category,                         // text not null
+        equipment_zone: location,         // text not null (в твоей таблице)
+        description,                      // text not null
+        photo_url: null,
+        criticality: priority,            // text not null
+        responsible_department,           // text not null
+        status,                           // text not null
+        deadline                          // timestamptz not null
+      };
+
+      const { data, error } = await supabaseClient
+        .from("requests")
+        .insert([payload])
+        .select("id");
+
+      setBusy(false);
+
+      if (error) {
+        console.log("INSERT ERROR:", error);
+        document.getElementById("errorMessage").textContent =
+          "Помилка при надсиланні. Перевір RLS/Policies у Supabase або назви колонок.";
+        document.getElementById("hintMessage").textContent =
+          `Технічна підказка: ${error.message || "дивись консоль"}`;
+        return;
+      }
+
+      document.getElementById("successMessage").textContent = "Заявка успішно відправлена!";
+      document.getElementById("hintMessage").textContent = `Номер: ${request_number}`;
+      form.reset();
+    });
+
+    // === 4) Quick connection check (можно удалить позже) ===
+    (async function testConnection() {
+      const { data, error } = await supabaseClient
+        .from("requests")
+        .select("id")
+        .limit(1);
+
+      console.log("SUPABASE TEST:", data, error);
+    })();
+  </script>
 </body>
 </html>
