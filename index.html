@@ -73,21 +73,23 @@
 <body>
   <div class="container">
     <h1>Заявка на ремонт</h1>
-<div style="text-align:center; margin: 10px 0 20px 0;">
-  <a href="./list.html"
-     style="
-       display:inline-block;
-       padding:12px 22px;
-       border-radius:12px;
-       background:#e66a2c;
-       color:#fff;
-       font-weight:600;
-       text-decoration:none;
-       box-shadow:0 6px 14px rgba(230,106,44,0.3);
-     ">
-    Усі заявки
-  </a>
-</div>
+
+    <div style="text-align:center; margin: 10px 0 20px 0;">
+      <a href="./list.html"
+         style="
+           display:inline-block;
+           padding:12px 22px;
+           border-radius:12px;
+           background:#e66a2c;
+           color:#fff;
+           font-weight:600;
+           text-decoration:none;
+           box-shadow:0 6px 14px rgba(230,106,44,0.3);
+         ">
+        Усі заявки
+      </a>
+    </div>
+
     <form id="repairForm">
       <label>Тип заявки</label>
       <select id="category" required>
@@ -111,7 +113,7 @@
         <option>Критично</option>
       </select>
 
-      <button id="submitBtn" type="submit">Надіслати заявку</button>
+      <button id="submitBtn" type="submit" disabled>Перевіряю доступ...</button>
     </form>
 
     <div class="success" id="successMessage"></div>
@@ -123,13 +125,44 @@
     // === 1) Supabase config ===
     const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
+    const LOGIN_PAGE = "./login.html";
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // === 2) Helpers ===
-    function pad4(n) {
-      return String(n).padStart(4, "0");
+    // === 2) Auth guard helpers ===
+    async function handleAuthRedirect() {
+      // Magic-link часто возвращает ?code=... (PKCE). Его нужно обменять на сессию.
+      const hasCode = new URLSearchParams(window.location.search).get("code");
+      if (hasCode) {
+        const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
+        if (error) {
+          console.log("exchangeCodeForSession error:", error);
+        }
+        // чистим URL, чтобы код не висел в адресной строке
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
     }
+
+    function goToLogin() {
+      const next = encodeURIComponent(window.location.pathname.replace(/^\//, "") || "index.html");
+      window.location.href = `${LOGIN_PAGE}?next=${next}`;
+    }
+
+    async function requireAuth() {
+      await handleAuthRedirect();
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      if (error) console.log("getSession error:", error);
+
+      if (!session) {
+        goToLogin();
+        return null;
+      }
+      return session;
+    }
+
+    // === 3) UI helpers ===
+    function pad4(n) { return String(n).padStart(4, "0"); }
 
     function makeRequestNumber() {
       const d = new Date();
@@ -145,11 +178,10 @@
       if (priority === "Терміново") hoursToAdd = 24;
       if (priority === "Критично") hoursToAdd = 4;
       now.setHours(now.getHours() + hoursToAdd);
-      return now.toISOString(); // timestamptz OK
+      return now.toISOString();
     }
 
     function mapResponsibleDepartment(category) {
-      // в твоей логике это по сути то же самое, но оставляю отдельной функцией
       return category;
     }
 
@@ -165,12 +197,25 @@
       btn.textContent = isBusy ? "Надсилаю..." : "Надіслати заявку";
     }
 
-    // === 3) Form submit ===
+    function setReadyToSubmit() {
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = false;
+      btn.textContent = "Надіслати заявку";
+    }
+
+    // === 4) Form submit ===
     const form = document.getElementById("repairForm");
+    let currentSession = null;
 
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
       clearMessages();
+
+      // на всякий случай перепроверяем сессию
+      if (!currentSession) {
+        currentSession = await requireAuth();
+        if (!currentSession) return;
+      }
 
       const category = document.getElementById("category").value.trim();
       const location = document.getElementById("location").value.trim();
@@ -186,9 +231,11 @@
       const deadline = computeDeadline(priority);
       const responsible_department = mapResponsibleDepartment(category);
 
-      // Минимальные заглушки, чтобы совпасть с твоей таблицей (где NOT NULL):
+      // IMPORTANT: initiator теперь от пользователя
+      const initiator = currentSession.user?.email || "Н/Д";
+
+      // пока нет таблицы ресторанов/профилей — оставляем заглушку
       const restaurant = "Н/Д";
-      const initiator = "Н/Д";
       const status = "Нова";
 
       setBusy(true);
@@ -197,14 +244,14 @@
         request_number,
         restaurant,
         initiator,
-        category,                         // text not null
-        equipment_zone: location,         // text not null (в твоей таблице)
-        description,                      // text not null
+        category,
+        equipment_zone: location,
+        description,
         photo_url: null,
-        criticality: priority,            // text not null
-        responsible_department,           // text not null
-        status,                           // text not null
-        deadline                          // timestamptz not null
+        criticality: priority,
+        responsible_department,
+        status,
+        deadline
       };
 
       const { data, error } = await supabaseClient
@@ -228,14 +275,19 @@
       form.reset();
     });
 
-    // === 4) Quick connection check (можно удалить позже) ===
-    (async function testConnection() {
-      const { data, error } = await supabaseClient
-        .from("requests")
-        .select("id")
-        .limit(1);
+    // === 5) Init ===
+    (async function init() {
+      // 1) требуем логин
+      currentSession = await requireAuth();
+      if (!currentSession) return;
 
+      // 2) разрешаем отправку
+      setReadyToSubmit();
+
+      // 3) быстрый тест (можно удалить потом)
+      const { data, error } = await supabaseClient.from("requests").select("id").limit(1);
       console.log("SUPABASE TEST:", data, error);
+      console.log("AUTH USER:", currentSession.user?.email);
     })();
   </script>
 </body>
