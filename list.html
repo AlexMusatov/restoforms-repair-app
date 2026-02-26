@@ -184,8 +184,8 @@
   <div class="topbar">
     <a class="btn" href="./index.html">← Назад до форми</a>
     <div style="display:flex; gap:10px;">
-      <button class="btn" id="refreshBtn">Оновити</button>
-      <button class="btn primary" id="resetBtn">Скинути фільтри</button>
+      <button class="btn" id="refreshBtn" disabled>Оновити</button>
+      <button class="btn primary" id="resetBtn" disabled>Скинути фільтри</button>
     </div>
   </div>
 
@@ -193,15 +193,15 @@
     <h1>Заявки</h1>
 
     <div class="filters">
-      <select id="filterRestaurant">
+      <select id="filterRestaurant" disabled>
         <option value="">Всі ресторани</option>
       </select>
 
-      <select id="filterCategory">
+      <select id="filterCategory" disabled>
         <option value="">Всі категорії</option>
       </select>
 
-      <select id="filterStatus">
+      <select id="filterStatus" disabled>
         <option value="">Всі статуси</option>
         <option value="Нова">Нова</option>
         <option value="У роботі">У роботі</option>
@@ -209,14 +209,14 @@
         <option value="Закрито">Закрито</option>
       </select>
 
-      <select id="filterCriticality">
+      <select id="filterCriticality" disabled>
         <option value="">Вся критичність</option>
         <option value="Звичайний">Звичайний</option>
         <option value="Терміново">Терміново</option>
         <option value="Критично">Критично</option>
       </select>
 
-      <input id="searchRq" placeholder="Пошук: RQ-..." />
+      <input id="searchRq" placeholder="Пошук: RQ-..." disabled />
     </div>
 
     <div class="meta">
@@ -231,6 +231,7 @@
   <script>
     const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
+    const LOGIN_PAGE = "./login.html";
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -247,6 +248,46 @@
 
     const refreshBtn = document.getElementById('refreshBtn');
     const resetBtn = document.getElementById('resetBtn');
+
+    let currentSession = null;
+    let currentEmail = null;
+
+    // === Auth guard ===
+    async function handleAuthRedirect() {
+      const hasCode = new URLSearchParams(window.location.search).get("code");
+      if (hasCode) {
+        const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
+        if (error) console.log("exchangeCodeForSession error:", error);
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    }
+
+    function goToLogin() {
+      const next = encodeURIComponent(window.location.pathname.replace(/^\//, "") || "list.html");
+      window.location.href = `${LOGIN_PAGE}?next=${next}`;
+    }
+
+    async function requireAuth() {
+      await handleAuthRedirect();
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      if (error) console.log("getSession error:", error);
+      if (!session) {
+        goToLogin();
+        return null;
+      }
+      return session;
+    }
+
+    function enableUI() {
+      refreshBtn.disabled = false;
+      resetBtn.disabled = false;
+      filterRestaurant.disabled = false;
+      filterCategory.disabled = false;
+      filterStatus.disabled = false;
+      filterCriticality.disabled = false;
+      searchRq.disabled = false;
+    }
 
     function escapeHtml(str) {
       return String(str ?? "")
@@ -269,10 +310,19 @@
 
     async function updateStatus(id, newStatus) {
       elErr.textContent = "";
+
+      if (!currentEmail) {
+        currentSession = await requireAuth();
+        if (!currentSession) return;
+        currentEmail = currentSession.user?.email || null;
+      }
+
+      // IMPORTANT: обновляем только "свои" строки
       const { error } = await supabaseClient
         .from('requests')
         .update({ status: newStatus })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('initiator', currentEmail);
 
       if (error) {
         elErr.textContent = `Помилка оновлення статусу: ${error.message}`;
@@ -334,9 +384,13 @@
     }
 
     async function loadDistinctOptions() {
+      if (!currentEmail) return;
+
+      // IMPORTANT: варианты собираем только из "моих" заявок
       const { data, error } = await supabaseClient
         .from('requests')
         .select('restaurant, category')
+        .eq('initiator', currentEmail)
         .order('created_at', { ascending: false })
         .limit(500);
 
@@ -359,9 +413,17 @@
       elHint.textContent = "Завантаження...";
       elList.innerHTML = "";
 
+      if (!currentEmail) {
+        elHint.textContent = "";
+        elCount.textContent = "0";
+        elList.innerHTML = `<div class="empty">Немає доступу</div>`;
+        return;
+      }
+
       let q = supabaseClient
         .from('requests')
         .select('*')
+        .eq('initiator', currentEmail)   // IMPORTANT: только мои заявки
         .order('created_at', { ascending: false })
         .limit(200);
 
@@ -425,13 +487,23 @@
       });
     }
 
+    // чтобы onchange мог вызвать updateStatus
     window.updateStatus = updateStatus;
 
     (async function init() {
       wire();
+
+      currentSession = await requireAuth();
+      if (!currentSession) return;
+
+      currentEmail = currentSession.user?.email || null;
+      enableUI();
+
       await loadDistinctOptions();
       await loadList();
+
       console.log("LIST PAGE READY");
+      console.log("AUTH USER:", currentEmail);
     })();
   </script>
 </body>
