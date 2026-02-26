@@ -112,5 +112,14 @@ form.addEventListener('submit', function(e) {
 });
 </script>
 
+<script>
+  const SUPABASE_URL = "https://ioalbfudggllsdoxgidw.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_ajzJVm91J-1BDaMicN-g5g_kMKRqZwq";
+
+  const supabase = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
+</script>
 </body>
 </html>
